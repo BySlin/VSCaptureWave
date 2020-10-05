@@ -1,6 +1,6 @@
 /*
- * This file is part of VitalSignsCaptureWave v1.004.
- * Copyright (C) 2015 John George K., xeonfusion@users.sourceforge.net
+ * This file is part of VitalSignsCaptureWave v1.009.
+ * Copyright (C) 2015-19 John George K., xeonfusion@users.sourceforge.net
 
     VitalSignsCapture is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
@@ -30,22 +30,55 @@ namespace VSCapture
     class Program
     {
         static EventHandler dataEvent;
-		
+        public static string DeviceID;
+        public static string JSONPostUrl;
+
         static void Main(string[] args)
         {
-            Console.WriteLine("VitalSignsCaptureWave v1.004 (C)2015 John George K.");
-            // Create a new SerialPort object with default settings.
-			DSerialPort _serialPort = DSerialPort.getInstance;
+            Console.WriteLine("VitalSignsCaptureWave v1.009 (C)2019 John George K.");
+            Console.WriteLine("For command line usage: -help");
+            Console.WriteLine();
 
-            Console.WriteLine("Select the Port to which Datex AS3 Monitor is to be connected, Available Ports:");
-            foreach (string s in SerialPort.GetPortNames())
+            // Create a new SerialPort object with default settings.
+            DSerialPort _serialPort = DSerialPort.getInstance;
+            string portName;
+            string sInterval;
+            string sWaveformSet;
+
+            var parser = new CommandLineParser();
+            parser.Parse(args);
+
+            if(parser.Arguments.ContainsKey("help"))
             {
-                Console.WriteLine(" {0}", s);
+                Console.WriteLine("VSCapture.exe -port [portname] -interval [number] -waveset [number]");
+                Console.WriteLine("-port <Set serial port name>");
+                Console.WriteLine("-interval <Set numeric transmission interval>");
+                Console.WriteLine("-waveset <Set waveform transmission set option>");
+                Console.WriteLine("-export <Set data export CSV or JSON option>");
+                Console.WriteLine("-devid <Set device ID for JSON export>");
+                Console.WriteLine("-url <Set JSON export url>");
+                Console.WriteLine();
+                return;
             }
 
+            if(parser.Arguments.ContainsKey("port"))
+            {
+                portName = parser.Arguments["port"][0];
+            }
+            else
+            {
+                Console.WriteLine("Select the Port to which Datex AS3 Monitor is to be connected, Available Ports:");
+                foreach (string s in SerialPort.GetPortNames())
+                {
+                    Console.WriteLine(" {0}", s);
+                }
 
-            Console.Write("COM port({0}): ", _serialPort.PortName.ToString());
-            string portName = Console.ReadLine();
+
+                Console.Write("COM port({0}): ", _serialPort.PortName.ToString());
+                portName = Console.ReadLine();
+
+            }
+
 
             if (portName != "")
             {
@@ -68,33 +101,107 @@ namespace VSCapture
 				_serialPort.DataReceived += new SerialDataReceivedEventHandler(p_DataReceived);
 				}
 
-                Console.WriteLine("You may now connect the serial cable to the Datex AS3 Monitor");
-                Console.WriteLine("Press any key to continue..");
+                if(!parser.Arguments.ContainsKey("port")) 
+                {
+                    Console.WriteLine("You may now connect the serial cable to the Datex AS3 Monitor");
+                    Console.WriteLine("Press any key to continue..");
                 
-				Console.ReadKey(true);
-												
+                    Console.ReadKey(true);
+                
+                }
+                								
                 //if (_serialPort.CtsHolding)
                 {
-                    Console.WriteLine();
-                    Console.Write("Enter Numeric data Transmission interval (seconds):");
-                    string sInterval = Console.ReadLine();
+                    if(parser.Arguments.ContainsKey("interval"))
+                    {
+                        sInterval = parser.Arguments["interval"][0];
+                    }
+                    else
+                    {
+                        Console.WriteLine();
+                        Console.Write("Enter Numeric data Transmission interval (seconds):");
+                        sInterval = Console.ReadLine();
+                    }
 
                     short nInterval = 5;
                     if (sInterval != "") nInterval = Convert.ToInt16(sInterval);
+                    if (nInterval < 5) nInterval = 5;
 
-					Console.WriteLine();
-					Console.WriteLine("Waveform data Transmission sets:");
-					Console.WriteLine("0. None");
-					Console.WriteLine("1. ECG1, INVP1, INVP2, PLETH");
-					Console.WriteLine("2. ECG1, INVP1, PLETH, CO2, RESP");
-					Console.WriteLine("3. ECG1, PLETH, CO2, RESP, AWP, VOL, FLOW");
-					Console.WriteLine("4. ECG1, ECG2");
-					Console.WriteLine("5. EEG1, EEG2, EEG3, EEG4");
-					Console.WriteLine();
-					Console.Write("Choose Waveform data Transmission set (0-5):");
+                    string sDataExportset;
+                    if (parser.Arguments.ContainsKey("export"))
+                    {
+                        sDataExportset = parser.Arguments["export"][0];
+                    }
+                    else
+                    {
+                        Console.WriteLine();
+                        Console.WriteLine("Data export options:");
+                        Console.WriteLine("1. Export as CSV files");
+                        Console.WriteLine("2. Export as CSV files and JSON to URL");
+                        Console.WriteLine();
+                        Console.Write("Choose data export option (1-2):");
 
-					string sWaveformSet = Console.ReadLine();
-					short nWaveformSet = 1;
+                        sDataExportset = Console.ReadLine();
+
+                    }
+
+                    int nDataExportset = 1;
+                    if (sDataExportset != "") nDataExportset = Convert.ToInt32(sDataExportset);
+
+                    if (nDataExportset == 2)
+                    {
+                        if (parser.Arguments.ContainsKey("devid"))
+                        {
+                            DeviceID = parser.Arguments["devid"][0];
+                        }
+                        else
+                        {
+                            Console.Write("Enter Device ID/Name:");
+                            DeviceID = Console.ReadLine();
+
+                        }
+
+                        if (parser.Arguments.ContainsKey("url"))
+                        {
+                            JSONPostUrl = parser.Arguments["url"][0];
+                        }
+                        else
+                        {
+                            Console.Write("Enter JSON Data Export URL(http://):");
+                            JSONPostUrl = Console.ReadLine();
+
+                        }
+                    }
+
+                    _serialPort.m_DeviceID = DeviceID;
+                    _serialPort.m_jsonposturl = JSONPostUrl;
+
+                    if (nDataExportset > 0 && nDataExportset < 3) _serialPort.m_dataexportset = nDataExportset;
+
+
+                    if (parser.Arguments.ContainsKey("waveset"))
+                    {
+                        sWaveformSet = parser.Arguments["waveset"][0];
+                    }
+                    else
+                    {
+                        Console.WriteLine();
+                        Console.WriteLine("Waveform data Transmission sets:");
+                        Console.WriteLine("0. None");
+                        Console.WriteLine("1. ECG1, INVP1, INVP2, PLETH");
+                        Console.WriteLine("2. ECG1, INVP1, PLETH, CO2, RESP");
+                        Console.WriteLine("3. ECG1, PLETH, CO2, RESP, AWP, VOL, FLOW");
+                        Console.WriteLine("4. ECG1, ECG2");
+                        Console.WriteLine("5. EEG1, EEG2, EEG3, EEG4");
+                        Console.WriteLine("6. ECG1, ECG2, ECG3");
+                        Console.WriteLine();
+                        Console.Write("Choose Waveform data Transmission set (0-6):");
+
+                        sWaveformSet = Console.ReadLine();
+                        
+                    }
+
+                    short nWaveformSet = 1;
 					if (sWaveformSet != "") nWaveformSet = Convert.ToInt16(sWaveformSet);
 
 
@@ -123,18 +230,6 @@ namespace VSCapture
 					//Sample rate for ECG is 300, INVP 100, PLETH 100, respiratory 25 each
 					byte [] WaveTrtype = new byte[8];
 
-					/*WaveTrtype[0] = DataConstants.DRI_WF_ECG1;
-                    //WaveTrtype[1] = DataConstants.DRI_WF_INVP1;
-                    WaveTrtype[1] = DataConstants.DRI_WF_VOL;
-					//WaveTrtype[2] = DataConstants.DRI_WF_INVP2;
-					WaveTrtype[2] = DataConstants.DRI_WF_PLETH;
-					WaveTrtype[3] = DataConstants.DRI_WF_CO2;
-					WaveTrtype[4] = DataConstants.DRI_WF_RESP;
-					WaveTrtype[5] = DataConstants.DRI_WF_AWP;
-                    //WaveTrtype[6] = DataConstants.DRI_WF_AA;
-                    WaveTrtype[6] = DataConstants.DRI_WF_FLOW;
-					WaveTrtype[7] = DataConstants.DRI_EOL_SUBR_LIST;*/
-
 					CreateWaveformSet (nWaveformSet, WaveTrtype);
 
 					if (nWaveformSet !=0)
@@ -148,7 +243,6 @@ namespace VSCapture
 						_serialPort.RequestMultipleWaveTransfer ( WaveTrtype, DataConstants.WF_REQ_CONT_START, DataConstants.DRI_LEVEL_2001);
 					}
                 }
-                //WaitForSeconds(5);
 
                 Console.WriteLine("Press Escape button to Stop");
 				
@@ -158,7 +252,7 @@ namespace VSCapture
 	                    {
 	                        if (_serialPort.BytesToRead != 0)
 	                        {
-	                            dataEvent.Invoke(new object(), new EventArgs());
+	                            dataEvent.Invoke(_serialPort, new EventArgs());
 	                        }
 	                        
 	                        if (Console.KeyAvailable == true)
@@ -275,7 +369,13 @@ namespace VSCapture
 				WaveTrtype [3] = DataConstants.DRI_WF_EEG4;
 				WaveTrtype [4] = DataConstants.DRI_EOL_SUBR_LIST;
 				break;
-			default:
+            case 6:
+                WaveTrtype[0] = DataConstants.DRI_WF_ECG1;
+                WaveTrtype[1] = DataConstants.DRI_WF_ECG2;
+                WaveTrtype[2] = DataConstants.DRI_WF_ECG3;
+                WaveTrtype[3] = DataConstants.DRI_EOL_SUBR_LIST;
+                break;
+            default:
 				WaveTrtype [0] = DataConstants.DRI_WF_ECG1;
 				WaveTrtype [1] = DataConstants.DRI_WF_INVP1;
 				WaveTrtype [2] = DataConstants.DRI_WF_INVP2;
@@ -291,5 +391,43 @@ namespace VSCapture
 
     }
 
+    public class CommandLineParser
+    {
+        public CommandLineParser()
+        {
+            Arguments = new Dictionary<string, string[]>();
+        }
+
+        public IDictionary<string, string[]> Arguments { get; private set; }
+
+        public void Parse(string[] args)
+        {
+            string currentName = "";
+            var values = new List<string>();
+            foreach (string arg in args)
+            {
+                if (arg.StartsWith("-", StringComparison.InvariantCulture))
+                {
+                    if (currentName != "")
+                        Arguments[currentName] = values.ToArray();
+
+                    values.Clear();
+                    currentName = arg.Substring(1);
+                }
+                else if (currentName == "")
+                    Arguments[arg] = new string[0];
+                else
+                    values.Add(arg);
+            }
+
+            if (currentName != "")
+                Arguments[currentName] = values.ToArray();
+        }
+
+        public bool Contains(string name)
+        {
+            return Arguments.ContainsKey(name);
+        }
+    }
 
 }
